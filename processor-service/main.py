@@ -1,14 +1,18 @@
 from fastapi import FastAPI
 import redis
-import json
 import psycopg2
 import threading
 import time
 import os
 
 app = FastAPI()
+listener_thread = None
 
-r = redis.Redis(host="redis", port=6379, decode_responses=True)
+r = redis.Redis(
+    host=os.getenv("REDIS_HOST"),
+    port=int(os.getenv("REDIS_PORT")),
+    decode_responses=True
+)
 
 conn = psycopg2.connect(
     dbname=os.getenv("POSTGRES_DB"),
@@ -29,21 +33,49 @@ cur.execute(
 """
 )
 conn.commit()
+
+
 def listen():
-    pubsub = r.pubsub()
-    pubsub.subscribe("log_channel")
-    for message in pubsub.listen():
-        if message["type"] == "message":
-            data = json.loads(message["data"])
-            cur.execute(
-                "INSERT INTO logs (message, timestamp) VALUES (%s, %s)",
-                (data["message"], data["timestamp"]),
-            )
-            conn.commit()
-            print("Inserted:", data)
+    conn = psycopg2.connect(
+        dbname=os.getenv("POSTGRES_DB"),
+        user=os.getenv("POSTGRES_USER"),
+        password=os.getenv("POSTGRES_PASSWORD"),
+        host=os.getenv("DB_HOST"),
+        port=int(os.getenv("DB_PORT")),
+    )
+    cur = conn.cursor()
 
-threading.Thread(target=listen, daemon=True).start()
+    try:
+        r.xgroup_create("log_stream", "log_group", id="0", mkstream=True)
+    except:
+        pass
 
+    while True:
+        messages = r.xreadgroup(
+            groupname="log_group",
+            consumername="consumer_1",
+            streams={"log_stream": ">"},
+            count=10,
+            block=5000
+        )
+
+        for stream, msgs in messages:
+            for msg_id, data in msgs:
+                cur.execute(
+                    "INSERT INTO logs (message, timestamp) VALUES (%s, %s)",
+                    (data["message"], float(data["timestamp"]))
+                )
+                conn.commit()
+
+                r.xack("log_stream", "log_group", msg_id)
+                print("Inserted:", data)
+
+@app.on_event("startup")
+def start_listener():
+    global listener_thread
+    if listener_thread is None or not listener_thread.is_alive():
+        listener_thread = threading.Thread(target=listen, daemon=True)
+        listener_thread.start()
 
 @app.get("/")
 def health():

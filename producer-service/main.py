@@ -1,17 +1,22 @@
 from fastapi import FastAPI
 import time
 import redis
+import os
 import json
+import threading
 
 app = FastAPI()
-r = redis.Redis(host="redis", port=6379, decode_responses=True)
-
+r = redis.Redis(
+    host=os.getenv("REDIS_HOST"),
+    port=int(os.getenv("REDIS_PORT")),
+    decode_responses=True
+)
 @app.get("/")
 def health():
     return {"status": "ok"}
 
 @app.get("/send")
 def send_event():
-    event = {"message": "log event", "timestamp": time.time()}
-    r.publish("log_channel", json.dumps(event))
-    return {"status": "sent", "event": event}
+    data = {"message": "log event", "timestamp": time.time()}
+    r.xadd("log_stream", data)
+    return {"status": "sent", "event": data}

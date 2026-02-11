@@ -3,14 +3,11 @@ from db import get_connection
 
 app = FastAPI()
 
-
-
-
 @app.get("/")
 def health():
     return {"status": "ok"}
 @app.get("/logs")
-def get_logs(limit: int = 10, from_timestamp: float = 0):
+def get_logs(limit: int = 100, from_timestamp: float = 0):
     conn = get_connection()
     cur = conn.cursor()
     cur.execute(
@@ -24,5 +21,7 @@ def get_logs(limit: int = 10, from_timestamp: float = 0):
         (from_timestamp, limit),
     )
     rows = cur.fetchall()
+    cur.close()
     conn.close()
-    return {"logs": rows}
+    logs = [{"id": row[0], "message": row[1], "timestamp": row[2]} for row in rows]
+    return {"logs": logs}
