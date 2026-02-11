@@ -1,11 +1,17 @@
 from fastapi import FastAPI
 import psycopg2
+import os
 
 app = FastAPI()
 
 conn = psycopg2.connect(
-    dbname="logs", user="user", password="pass", host="postgres", port=5432
+    dbname=os.getenv("POSTGRES_DB"),
+    user=os.getenv("POSTGRES_USER"),
+    password=os.getenv("POSTGRES_PASSWORD"),
+    host=os.getenv("DB_HOST"),
+    port=int(os.getenv("DB_PORT")),
 )
+
 cur = conn.cursor()
 
 @app.get("/")

@@ -4,14 +4,20 @@ import json
 import psycopg2
 import threading
 import time
+import os
 
 app = FastAPI()
 
 r = redis.Redis(host="redis", port=6379, decode_responses=True)
 
 conn = psycopg2.connect(
-    dbname="logs", user="user", password="pass", host="postgres", port=5432
+    dbname=os.getenv("POSTGRES_DB"),
+    user=os.getenv("POSTGRES_USER"),
+    password=os.getenv("POSTGRES_PASSWORD"),
+    host=os.getenv("DB_HOST"),
+    port=int(os.getenv("DB_PORT")),
 )
+
 cur = conn.cursor()
 cur.execute(
     """
