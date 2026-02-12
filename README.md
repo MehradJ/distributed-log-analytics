@@ -73,6 +73,8 @@ This validates:
 2. Processor consumes and persists event
 3. API can read and return persisted event
 
+![Smoke test result](./docs/images/smoke-test-result.png)
+
 ### Fault-Tolerance Demo
 
 1. Stop processor:
