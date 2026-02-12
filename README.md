@@ -103,14 +103,14 @@ On each push/PR:
 1. Build and start all services
 2. Send an event via Producer
 3. Validate event appears in API logs
-4. Create and upload a release artifact (`.tgz`) on push events
-5. Run a deploy placeholder step on pushes to `main`
-6. Tear down environment
+4. Validate fault tolerance by stopping processor, sending an event, restarting processor, and checking recovery
+5. Create and upload a release artifact (`.tgz`) on push events
+6. Run a deploy placeholder step on pushes to `main`
+7. Tear down environment
 
 Note:
 
 - Dockerfiles already support dynamic cloud ports using `${PORT}`.
-- Keep all services in one Railway project so private networking works more easily.
 
 ### Limitations
 

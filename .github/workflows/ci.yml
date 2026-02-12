@@ -39,6 +39,25 @@ jobs:
           echo "$response"
           echo "$response" | grep -q "ci-smoke-event"
 
+      - name: Fault-tolerance check
+        run: |
+          FT_MESSAGE="ci-ft-$(date +%s)"
+          docker compose stop processor
+          send_response="$(curl -sf "http://localhost:8001/send?message=${FT_MESSAGE}")"
+          echo "$send_response"
+          echo "$send_response" | grep -q '"status":"sent"'
+          docker compose start processor
+
+          for i in {1..10}; do
+            response="$(curl -sf 'http://localhost:8002/logs?limit=100')"
+            echo "$response" | grep -q "$FT_MESSAGE" && exit 0
+            sleep 2
+          done
+
+          echo "Fault-tolerance message was not found in API logs"
+          docker compose logs
+          exit 1
+
       - name: Release artifact
         if: github.event_name == 'push'
         run: |
