@@ -5,6 +5,7 @@ import threading
 import time
 import os
 import socket
+from redis.exceptions import ResponseError
 
 app = FastAPI()
 listener_thread = None
@@ -42,40 +43,55 @@ cur.execute(
 conn.commit()
 
 
-def listen():
-    conn = psycopg2.connect(
-        dbname=os.getenv("POSTGRES_DB"),
-        user=os.getenv("POSTGRES_USER"),
-        password=os.getenv("POSTGRES_PASSWORD"),
-        host=os.getenv("DB_HOST"),
-        port=int(os.getenv("DB_PORT")),
-    )
-    cur = conn.cursor()
-
+def ensure_group_exists():
     try:
         r.xgroup_create(STREAM_NAME, GROUP_NAME, id="0", mkstream=True)
-    except:
-        pass
+    except ResponseError as exc:
+        if "BUSYGROUP" not in str(exc):
+            raise
 
+
+def listen():
     while True:
-        messages = r.xreadgroup(
-            groupname=GROUP_NAME,
-            consumername=CONSUMER_NAME,
-            streams={STREAM_NAME: ">"},
-            count=READ_COUNT,
-            block=READ_BLOCK_MS
-        )
+        conn = None
+        cur = None
+        try:
+            conn = psycopg2.connect(
+                dbname=os.getenv("POSTGRES_DB"),
+                user=os.getenv("POSTGRES_USER"),
+                password=os.getenv("POSTGRES_PASSWORD"),
+                host=os.getenv("DB_HOST"),
+                port=int(os.getenv("DB_PORT")),
+            )
+            cur = conn.cursor()
+            ensure_group_exists()
 
-        for stream, msgs in messages:
-            for msg_id, data in msgs:
-                cur.execute(
-                    "INSERT INTO logs (message, timestamp) VALUES (%s, %s)",
-                    (data["message"], float(data["timestamp"]))
+            while True:
+                messages = r.xreadgroup(
+                    groupname=GROUP_NAME,
+                    consumername=CONSUMER_NAME,
+                    streams={STREAM_NAME: ">"},
+                    count=READ_COUNT,
+                    block=READ_BLOCK_MS
                 )
-                conn.commit()
 
-                r.xack(STREAM_NAME, GROUP_NAME, msg_id)
-                print("Inserted:", data)
+                for stream, msgs in messages:
+                    for msg_id, data in msgs:
+                        cur.execute(
+                            "INSERT INTO logs (message, timestamp) VALUES (%s, %s)",
+                            (data["message"], float(data["timestamp"]))
+                        )
+                        conn.commit()
+                        r.xack(STREAM_NAME, GROUP_NAME, msg_id)
+                        print("Inserted:", data)
+        except Exception as exc:
+            print(f"Listener error: {exc}. Retrying in 2s...")
+            time.sleep(2)
+        finally:
+            if cur is not None:
+                cur.close()
+            if conn is not None:
+                conn.close()
 
 @app.on_event("startup")
 def start_listener():

@@ -88,6 +88,12 @@ This validates:
 
 You should see the events after processor is back.
 
+Automated check (Windows PowerShell):
+
+```powershell
+.\scripts\fault_tolerance_test.ps1
+```
+
 ### CI/CD
 
 Pipeline file: `.github/workflows/ci.yml`
@@ -97,7 +103,9 @@ On each push/PR:
 1. Build and start all services
 2. Send an event via Producer
 3. Validate event appears in API logs
-4. Tear down environment
+4. Create and upload a release artifact (`.tgz`) on push events
+5. Run a deploy placeholder step on pushes to `main`
+6. Tear down environment
 
 Note:
 

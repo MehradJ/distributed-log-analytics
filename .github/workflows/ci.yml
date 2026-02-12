@@ -8,6 +8,8 @@ jobs:
   smoke-test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -36,6 +38,23 @@ jobs:
           response="$(curl -sf 'http://localhost:8002/logs?limit=50')"
           echo "$response"
           echo "$response" | grep -q "ci-smoke-event"
+
+      - name: Release artifact
+        if: github.event_name == 'push'
+        run: |
+          tar -czf distributed-log-analytics-${{ github.sha }}.tgz \
+            docker-compose.yml README.md producer-service processor-service api-service scripts
+
+      - name: Upload release artifact
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: distributed-log-analytics-${{ github.sha }}
+          path: distributed-log-analytics-${{ github.sha }}.tgz
+
+      - name: Deploy placeholder
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: echo "Deploy step placeholder - wire your cloud deploy command here."
 
       - name: Teardown
         if: always()
